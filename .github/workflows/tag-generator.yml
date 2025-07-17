@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  call-set-version:
+  generate-version:
     uses: oviva-ag/actions/.github/workflows/version-generator/set-version.yml@main
     with:
       name: test_release_tag
@@ -13,8 +13,8 @@ jobs:
       GH_CI_PAT: ${{ secrets.GH_CI_PAT }}
 
   print-version:
-    needs: call-set-version
+    needs: generate-version
     runs-on: ubuntu-latest
     steps:
-      - name: Print version
-        run: echo "Generated version is ${{ needs.call-set-version.outputs.version }}"
+      - name: Print generated version
+        run: echo "Generated version is ${{ needs.generate-version.outputs.version }}"
