@@ -1,20 +1,59 @@
-name: Use Version Generator
+name: Set Version
 
 on:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      name:
+        type: string
+        description: 'Name of the service'
+        required: true
+      repositoryPath:
+        type: string
+        description: 'Path to the repository'
+        required: false
+        default: ${{ github.workspace }}
+      dev_mode:
+        type: boolean
+        description: 'Enable dev mode when set to true. When enabled will fetch the latest dev version instead of the latest rc version'
+        required: false
+        default: false
+
+    outputs:
+      version:
+        value: ${{ jobs.set-version.outputs.generated_version }}
+        description: 'the generated version'
 
 jobs:
-  generate-version:
-    uses: oviva-ag/actions/.github/workflows/version-generator/set-version.yml@main
-    with:
-      name: test_release_tag
-      dev_mode: false
-    secrets:
-      GH_CI_PAT: ${{ secrets.GH_CI_PAT }}
-
-  print-version:
-    needs: generate-version
+  set-version:
+    name: Set Version To Release
     runs-on: ubuntu-latest
+    outputs:
+      generated_version: ${{ steps.version-generator.outputs.generated_version }}
+
     steps:
-      - name: Print generated version
-        run: echo "Generated version is ${{ needs.generate-version.outputs.version }}"
+      - name: Fetch Latest Version
+        id: fetch-latest-version
+        uses: oviva-ag/actions/latest-tag-fetcher@main
+        with:
+          name: vgen
+          token: ${{ secrets.GH_CI_PAT }}
+          dev_mode: ${{ inputs.dev_mode }}
+
+      - name: Download Go Release
+        uses: oviva-ag/actions/download-go-release@main
+        with:
+          name: version-generator
+          version: ${{ steps.fetch-latest-version.outputs.latest_version }}
+          token: ${{ secrets.GH_CI_PAT }}
+
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run Version Generator
+        id: version-generator
+        run: version-generator-amd64
+        env:
+          INPUT_NAME: ${{ inputs.name }}
+          INPUT_REPOSITORY_PATH: ${{ github.workspace }}
+          INPUT_GITHUB_REF: ${{ github.ref }}
