@@ -1,0 +1,20 @@
+name: Use Version Generator
+
+on:
+  workflow_dispatch:
+
+jobs:
+  call-set-version:
+    uses: oviva-ag/actions/.github/workflows/version-generator/set-version.yml@main
+    with:
+      name: test_release_tag
+      dev_mode: false
+    secrets:
+      GH_CI_PAT: ${{ secrets.GH_CI_PAT }}
+
+  print-version:
+    needs: call-set-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print version
+        run: echo "Generated version is ${{ needs.call-set-version.outputs.version }}"
