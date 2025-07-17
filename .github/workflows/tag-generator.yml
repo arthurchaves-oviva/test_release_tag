@@ -1,7 +1,7 @@
 name: Set Version
 
 on:
-  dispatch:
+  workflow_dispatch:
     inputs:
       name:
         type: string
