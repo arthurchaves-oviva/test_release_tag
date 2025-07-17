@@ -1,4 +1,4 @@
-name: Generate Version in Punishers
+name: Generate Version in test_release_tag
 
 on:
   workflow_dispatch:
