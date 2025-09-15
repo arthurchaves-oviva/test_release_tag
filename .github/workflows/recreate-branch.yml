@@ -1,0 +1,47 @@
+name: recreate_branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch_name:
+        description: Branch name to recreate
+        required: true
+        type: string
+
+concurrency:
+  group: recreate_branch
+
+permissions:
+  contents: write
+
+jobs:
+  recreate_branch:
+    name: Recreate branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: echo "Recreating branch ${{ github.event.inputs.branch_name }}"
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Git
+        run: |
+          git config user.name "DWH QA github-action"
+          git config user.email "github-actions@github.com"
+
+      - name: Recreate branch
+        env:
+          BRANCH_TO_RECREATE: ${{ github.event.inputs.branch_name }}
+        run: |
+          git checkout main
+          git pull --rebase
+          git branch -d "$BRANCH_TO_RECREATE" || true
+          git push origin --delete "$BRANCH_TO_RECREATE" || true
+          git checkout main
+          git checkout -b "$BRANCH_TO_RECREATE"
+          git push origin -u "$BRANCH_TO_RECREATE"
+
+
