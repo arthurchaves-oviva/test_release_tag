@@ -18,6 +18,8 @@ jobs:
   recreate_branch:
     name: Recreate branch
     runs-on: ubuntu-latest
+    environment:
+      name: recreate-branch
 
     steps:
       - run: echo "Recreating branch ${{ github.event.inputs.branch_name }}"
