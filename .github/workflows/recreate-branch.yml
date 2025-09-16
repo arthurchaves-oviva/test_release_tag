@@ -10,6 +10,7 @@ on:
         default: main
         options:
           - release/qa
+          - release/qa_2
       branch_name:
         description: Or type a custom branch name (overrides choice if set)
         required: false
