@@ -9,8 +9,8 @@ on:
         type: choice
         default: all_qa_branches
         options:
-          - release/qa
-          - release/qa_2
+          - release/github_hb_qa
+          - release/google_hb_prod_qa
           - all_qa_branches
           - custom_branch
       custom_branch:
@@ -18,10 +18,7 @@ on:
         required: false
         type: string
   schedule:
-    - cron: '0 5 * * 1'
-    - cron: '13 * * * *'
-    - cron: '*/5 * * * *'
-    - cron: '* * * * *'
+    - cron: '0 5 * * 1,4'
 
 concurrency:
   group: recreate_branch
@@ -44,7 +41,7 @@ jobs:
         run: |
           if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
             # For scheduled runs, always process all QA branches
-            TARGETS=$'release/qa\nrelease/qa_2'
+            TARGETS=$'release/github_hb_qa\nrelease/google_hb_prod_qa'
           else
             case "$CALL_MODE" in
               custom_branch)
@@ -55,9 +52,9 @@ jobs:
                 TARGETS="$CUSTOM_BRANCH"
                 ;;
               all_qa_branches)
-                TARGETS=$'release/qa\nrelease/qa_2'
+                TARGETS=$'release/github_hb_qa\nrelease/google_hb_prod_qa'
                 ;;
-              release/qa|release/qa_2)
+              release/github_hb_qa|release/google_hb_prod_qa)
                 TARGETS="$CALL_MODE"
                 ;;
               *)
