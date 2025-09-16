@@ -97,5 +97,3 @@ jobs:
             [ -z "$BRANCH" ] && continue
             recreate_branch "$BRANCH"
           done
-
-
