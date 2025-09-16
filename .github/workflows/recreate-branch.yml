@@ -19,7 +19,7 @@ on:
         type: string
   schedule:
     - cron: '0 5 * * 1'
-    - cron: '*/5 * * * *'
+    - cron: '13 * * * *'
 
 concurrency:
   group: recreate_branch
