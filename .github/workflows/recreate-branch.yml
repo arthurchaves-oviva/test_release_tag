@@ -7,14 +7,14 @@ on:
         description: Select how to call the workflow
         required: true
         type: choice
-        default: release/qa
+        default: all_qa_branches
         options:
           - release/qa
           - release/qa_2
           - all_qa_branches
-          - editable_text
+          - custom_branch
       custom_branch:
-        description: Provide a custom branch (only if editable_text is selected)
+        description: Provide a custom branch (only if custom_branch is selected)
         required: false
         type: string
   schedule:
@@ -41,21 +41,13 @@ jobs:
           CUSTOM_BRANCH: ${{ github.event.inputs.custom_branch }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
-            # Decide based on current UTC day/hour
-            DAY=$(date -u +%u)   # 1=Mon ... 7=Sun
-            HOUR=$(date -u +%H)
-            if [ "$DAY" = "1" ] && [ "$HOUR" = "05" ]; then
-              TARGETS="release/qa"
-            elif [ "$DAY" = "4" ] && [ "$HOUR" = "06" ]; then
-              TARGETS=$'release/qa\nrelease/qa_2'
-            else
-              TARGETS="release/qa"
-            fi
+            # For scheduled runs, always process all QA branches
+            TARGETS=$'release/qa\nrelease/qa_2'
           else
             case "$CALL_MODE" in
-              editable_text)
+              custom_branch)
                 if [ -z "$CUSTOM_BRANCH" ]; then
-                  echo "Error: custom_branch must be provided when call_mode=editable_text" >&2
+                  echo "Error: custom_branch must be provided when call_mode=custom_branch" >&2
                   exit 1
                 fi
                 TARGETS="$CUSTOM_BRANCH"
