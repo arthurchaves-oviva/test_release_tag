@@ -3,18 +3,23 @@ name: recreate_branch
 on:
   workflow_dispatch:
     inputs:
-      branch_choice:
-        description: Choose a common branch (used if free text empty)
+      call_mode:
+        description: Select how to call the workflow
         required: true
         type: choice
-        default: main
+        default: release/qa
         options:
           - release/qa
           - release/qa_2
-      branch_name:
-        description: Or type a custom branch name (overrides choice if set)
+          - all_qa_branches
+          - editable_text
+      custom_branch:
+        description: Provide a custom branch (only if editable_text is selected)
         required: false
         type: string
+  schedule:
+    - cron: '0 5 * * 1'
+    - cron: '0 6 * * 4'
 
 concurrency:
   group: recreate_branch
@@ -32,15 +37,47 @@ jobs:
     steps:
       - name: Resolve target branch
         env:
-          BRANCH_NAME_INPUT: ${{ github.event.inputs.branch_name }}
-          BRANCH_CHOICE_INPUT: ${{ github.event.inputs.branch_choice }}
+          CALL_MODE: ${{ github.event.inputs.call_mode }}
+          CUSTOM_BRANCH: ${{ github.event.inputs.custom_branch }}
         run: |
-          TARGET_BRANCH="$BRANCH_NAME_INPUT"
-          if [ -z "$TARGET_BRANCH" ]; then
-            TARGET_BRANCH="$BRANCH_CHOICE_INPUT"
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            # Decide based on current UTC day/hour
+            DAY=$(date -u +%u)   # 1=Mon ... 7=Sun
+            HOUR=$(date -u +%H)
+            if [ "$DAY" = "1" ] && [ "$HOUR" = "05" ]; then
+              TARGETS="release/qa"
+            elif [ "$DAY" = "4" ] && [ "$HOUR" = "06" ]; then
+              TARGETS=$'release/qa\nrelease/qa_2'
+            else
+              TARGETS="release/qa"
+            fi
+          else
+            case "$CALL_MODE" in
+              editable_text)
+                if [ -z "$CUSTOM_BRANCH" ]; then
+                  echo "Error: custom_branch must be provided when call_mode=editable_text" >&2
+                  exit 1
+                fi
+                TARGETS="$CUSTOM_BRANCH"
+                ;;
+              all_qa_branches)
+                TARGETS=$'release/qa\nrelease/qa_2'
+                ;;
+              release/qa|release/qa_2)
+                TARGETS="$CALL_MODE"
+                ;;
+              *)
+                echo "Unknown call_mode: $CALL_MODE" >&2
+                exit 1
+                ;;
+            esac
           fi
-          echo "Target branch: $TARGET_BRANCH"
-          echo "BRANCH_TO_RECREATE=$TARGET_BRANCH" >> "$GITHUB_ENV"
+          echo "Target branches:" && printf '%s\n' "$TARGETS" | sed 's/^/ - /'
+          {
+            echo 'BRANCHES_TO_RECREATE<<EOF'
+            printf '%s\n' "$TARGETS"
+            echo 'EOF'
+          } >> "$GITHUB_ENV"
 
       - name: Checkout code
         uses: actions/checkout@v2
@@ -52,14 +89,22 @@ jobs:
           git config user.name "DWH QA github-action"
           git config user.email "github-actions@github.com"
 
-      - name: Recreate branch
+      - name: Recreate branches
         run: |
-          git checkout main
-          git pull --rebase
-          git branch -d "$BRANCH_TO_RECREATE" || true
-          git push origin --delete "$BRANCH_TO_RECREATE" || true
-          git checkout main
-          git checkout -b "$BRANCH_TO_RECREATE"
-          git push origin -u "$BRANCH_TO_RECREATE"
+          recreate_branch() {
+            branch_name="$1"
+            echo "Recreating branch $branch_name"
+            git checkout main
+            git pull --rebase
+            git branch -d "$branch_name" || true
+            git push origin --delete "$branch_name" || true
+            git checkout main
+            git checkout -b "$branch_name"
+            git push origin -u "$branch_name"
+          }
+          echo "$BRANCHES_TO_RECREATE" | while IFS= read -r BRANCH; do
+            [ -z "$BRANCH" ] && continue
+            recreate_branch "$BRANCH"
+          done
 
 
