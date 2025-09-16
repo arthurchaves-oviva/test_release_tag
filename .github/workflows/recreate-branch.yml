@@ -32,7 +32,7 @@ jobs:
     name: Recreate branch
     runs-on: ubuntu-latest
     environment:
-      name: recreate-branch
+      name: ${{ github.event_name == 'schedule' && 'recreate-branch-auto' || 'recreate-branch' }}
 
     steps:
       - name: Resolve target branch
