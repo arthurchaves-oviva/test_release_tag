@@ -78,12 +78,12 @@ jobs:
         run: |
           git fetch --no-tags --prune --depth=1 origin "+refs/heads/${RELEASE_BRANCH}:refs/remotes/origin/${RELEASE_BRANCH}"
           mkdir -p "$GITHUB_WORKSPACE/tmp"
-          git show "origin/${RELEASE_BRANCH}:commits" > "$GITHUB_WORKSPACE/tmp/commits.txt" || touch "$GITHUB_WORKSPACE/tmp/commits.txt"
+          git show "origin/${RELEASE_BRANCH}:tmp/commits.txt" > "$GITHUB_WORKSPACE/tmp/commits.txt" || touch "$GITHUB_WORKSPACE/tmp/commits.txt"
           echo "Loaded commits file from origin/${RELEASE_BRANCH}"
 
       - name: Print commits file
         run: |
-          echo "--- commits (origin/${RELEASE_BRANCH}:commits) ---"
+          echo "--- commits (origin/${RELEASE_BRANCH}:tmp/commits.txt) ---"
           if [ -s "$GITHUB_WORKSPACE/tmp/commits.txt" ]; then
             cat "$GITHUB_WORKSPACE/tmp/commits.txt"
           else
