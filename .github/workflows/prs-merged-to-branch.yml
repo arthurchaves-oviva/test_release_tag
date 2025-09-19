@@ -1,0 +1,108 @@
+name: Check PRs merged into selected branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to check for merged PR commits
+        required: true
+        type: string
+      pr_state:
+        description: Which PRs to check
+        required: true
+        type: choice
+        default: open
+        options:
+          - open
+          - closed
+          - all
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: prs_merged_to_branch
+
+jobs:
+  check:
+    name: Check PRs against ${{ github.event.inputs.target_branch }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare environment
+        env:
+          TARGET_BRANCH_INPUT: ${{ github.event.inputs.target_branch }}
+        run: |
+          TARGET_BRANCH="$TARGET_BRANCH_INPUT"
+          echo "TARGET_BRANCH=$TARGET_BRANCH" >> "$GITHUB_ENV"
+          git fetch --no-tags --prune origin "+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}" || {
+            echo "Target branch ${TARGET_BRANCH} not found on origin" >&2
+            exit 1
+          }
+          echo "Using target branch: origin/${TARGET_BRANCH}"
+
+      - name: Install jq
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+
+      - name: List PRs and check commit inclusion
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_STATE: ${{ github.event.inputs.pr_state }}
+        run: |
+          set -euo pipefail
+          OWNER="${GITHUB_REPOSITORY%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          API_ROOT="https://api.github.com"
+
+          page=1
+          any=false
+          while :; do
+            resp=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" \
+              "${API_ROOT}/repos/${OWNER}/${REPO}/pulls?state=${PR_STATE}&per_page=100&page=${page}")
+            count=$(echo "$resp" | jq 'length')
+            if [ "$count" -eq 0 ]; then
+              break
+            fi
+            any=true
+            echo "$resp" | jq -c '.[] | {number, title, base: .base.ref, head: .head.ref}' | while read -r pr; do
+              number=$(echo "$pr" | jq -r '.number')
+              title=$(echo "$pr" | jq -r '.title')
+              base=$(echo "$pr" | jq -r '.base')
+              head=$(echo "$pr" | jq -r '.head')
+
+              commits_resp=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" \
+                "${API_ROOT}/repos/${OWNER}/${REPO}/pulls/${number}/commits?per_page=250")
+              shas=$(echo "$commits_resp" | jq -r '.[].sha')
+
+              all_included=1
+              missing_shas=()
+              for sha in $shas; do
+                if ! git merge-base --is-ancestor "$sha" "origin/${TARGET_BRANCH}"; then
+                  all_included=0
+                  missing_shas+=("$sha")
+                fi
+              done
+
+              if [ "$all_included" -eq 1 ]; then
+                echo "#${number} [$base <- $head] ${title} => OK"
+              else
+                short_missing=$(printf '%s\n' "${missing_shas[@]}" | cut -c1-12 | paste -sd, -)
+                echo "#${number} [$base <- $head] ${title} => NOK (missing: ${short_missing})"
+              fi
+            done
+            page=$((page+1))
+          done
+
+          if [ "$any" = false ]; then
+            echo "No PRs found for state=${PR_STATE}."
+          fi
+
+
