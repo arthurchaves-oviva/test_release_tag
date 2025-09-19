@@ -77,14 +77,14 @@ jobs:
       - name: Fetch release branch and read commits file
         run: |
           git fetch --no-tags --prune --depth=1 origin "+refs/heads/${RELEASE_BRANCH}:refs/remotes/origin/${RELEASE_BRANCH}"
-          git show "origin/${RELEASE_BRANCH}:commits" > ./tmp/commits.txt || touch ./tmp/commits.txt
+          git show "origin/${RELEASE_BRANCH}:commits" > /tmp/commits.txt || touch /tmp/commits.txt
           echo "Loaded commits file from origin/${RELEASE_BRANCH}"
 
       - name: Print commits file
         run: |
           echo "--- commits (origin/${RELEASE_BRANCH}:commits) ---"
-          if [ -s ./tmp/commits.txt ]; then
-            cat ./tmp/commits.txt
+          if [ -s /tmp/commits.txt ]; then
+            cat /tmp/commits.txt
           else
             echo "<empty>"
           fi
@@ -92,7 +92,7 @@ jobs:
 
       - name: Check if PR SHA is listed
         run: |
-          if grep -Fq "$PR_SHA" ./tmp/commits.txt; then
+          if grep -Fq "$PR_SHA" /tmp/commits.txt; then
             echo OK
           else
             echo NOK
