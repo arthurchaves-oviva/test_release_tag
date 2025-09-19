@@ -1,0 +1,91 @@
+name: PR commit listed in release_branch commits
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+    branches:
+      - main
+  pull_request_review:
+    types: [submitted]
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  RELEASE_BRANCH: ${{ vars.RELEASE_BRANCH || 'release/qa' }}
+
+jobs:
+  check-commit-listed:
+    name: Check PR last commit is listed in commits file
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Context
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "pr=${{ github.event.pull_request.number }}"
+          echo "actor=${{ github.actor }}"
+          echo "release_branch=$RELEASE_BRANCH"
+
+      - name: Determine approval state
+        id: approval
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const name = context.repo.repo;
+            const number = context.payload.pull_request?.number;
+            if (!number) {
+              core.setOutput('approved', 'false');
+              return;
+            }
+            const query = `
+              query($owner:String!, $name:String!, $number:Int!){
+                repository(owner:$owner, name:$name){
+                  pullRequest(number:$number){
+                    isDraft
+                    reviewDecision
+                  }
+                }
+              }`;
+            const result = await github.graphql(query, { owner, name, number });
+            const pr = result.repository.pullRequest;
+            const approved = !pr.isDraft && pr.reviewDecision === 'APPROVED';
+            core.setOutput('approved', approved ? 'true' : 'false');
+
+      - name: Exit if not approved
+        if: steps.approval.outputs.approved != 'true'
+        run: |
+          echo "PR not approved; skipping check."
+          exit 0
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve PR head SHA
+        run: |
+          PR_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          echo "PR_SHA=$PR_SHA" >> "$GITHUB_ENV"
+          echo "PR head sha: $PR_SHA"
+
+      - name: Fetch release branch and read commits file
+        run: |
+          git fetch --no-tags --prune --depth=1 origin "+refs/heads/${RELEASE_BRANCH}:refs/remotes/origin/${RELEASE_BRANCH}"
+          git show "origin/${RELEASE_BRANCH}:commits" > /tmp/commits.txt || touch /tmp/commits.txt
+          echo "Loaded commits file from origin/${RELEASE_BRANCH}"
+
+      - name: Check if PR SHA is listed
+        run: |
+          if grep -Fq "$PR_SHA" /tmp/commits.txt; then
+            echo OK
+          else
+            echo NOK
+          fi
+
+
